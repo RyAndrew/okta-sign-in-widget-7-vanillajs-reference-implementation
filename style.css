@@ -1,0 +1,409 @@
+:root {
+    --color-bg: #69F7BE;
+    --color-text-main: #000000;
+    --color-primary: #FFFF00;
+    --image-max-width: 300px;
+    --image-margin: 3rem;
+    --font-family: "Verdana";
+    --font-family-header: "Verdana";
+  }
+  
+  /* Basic page style resets */
+  * {
+    box-sizing: border-box;
+  }
+  [hidden] {
+    display: none !important;
+  }
+  
+  /* Our remix on glitch button */
+  .btn--remix {
+    font-family: Verdana;
+    padding: 0.75rem 1rem;
+    font-size: 1.1rem;
+    line-height: 1rem;
+    font-weight: 500;
+    height: 2.75rem;
+    align-items: center;
+    cursor: pointer;
+    background: #FFFFFF;
+    border: 1px solid #000000;
+    box-sizing: border-box;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #000;
+    white-space: nowrap;
+    margin-left: auto;
+  }
+  .btn--remix img {
+    margin-right: 0.5rem;
+  }
+  .btn--remix:hover {
+    background-color: #D0FFF1;
+  }
+  
+  /* Navigation grid */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    margin: 1rem auto 0;
+    padding: 1rem 0 0.75rem 0;
+    width: 100%;
+    flex-wrap: wrap;
+    border-top: 4px solid #fff;
+  }
+  
+  .footer a:not(.btn--remix):link,
+  a:not(.btn--remix):visited {
+    font-family: Verdana;
+    font-style: normal;
+    font-weight: normal;
+    font-size: 1.1rem;
+    color: #000;
+    border-style: none;
+  }
+  .footer a:hover {
+    background: var(--color-primary);
+  }
+  
+  .footer .links {
+    padding: 0.5rem 1rem 1.5rem;
+    white-space: nowrap;
+  }
+  
+  .divider {
+    padding: 0 1rem;
+  }
+  /******************************************************************************
+  END Glitch hello-app default styles
+  ******************************************************************************/
+  
+  body {
+    font-family: Verdana;
+    background-color: var(--color-bg);
+  }
+  
+  /* Page structure */
+  /* Set min-height to prevent page jumping around when screens change and widget loads */
+  .wrapper {
+    place-items: center;
+    margin: 0 1rem;
+    min-height:890px;
+  }
+  .content {
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Very light scaling for our illustration */
+  .title {
+    color: #2800FF;
+    font-family: Verdana;
+    font-style: normal;
+    font-weight: bold;
+    font-size: 100px;
+    line-height: 105%;
+    margin: 0;
+    font-size: 4rem;
+  }
+  
+  /* Very light scaling for our illustration */
+  .illustration {
+    max-width: 100%;
+    max-height: var(--image-max-width);
+    margin-top: var(--image-margin);
+  }
+  
+  /* Instructions */
+  .instructions {
+    margin: 1rem auto 0;
+  }
+  
+  /* Button - Add it from the README instructions */
+  button,
+  input {
+    font-family: inherit;
+    font-size: 100%;
+    background: #FFFFFF;
+    border: 1px solid #000000;
+    box-sizing: border-box;
+    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    transition: 500ms;
+  }
+  
+  button.action-button {
+    margin-top: 6px;
+  }
+  
+  button:hover {
+    box-shadow: -4px 4px 6px black;
+  }
+  button:active {
+    background: #999;
+  }
+  
+  /* Subheading */
+  h2 {
+    color: #2800FF;
+  }
+  
+  #loading-container {
+    width: 100%;
+    height:300px;
+    align-content: center;
+  }
+  #loading, #widget-loading-spinner {
+    margin: 0 auto;
+    /*display: inline-block;*/
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+    -webkit-animation: spin 1s ease-in-out infinite;
+  }
+  div#widget-loading-spinner {
+    display: inline-block;
+    position: absolute;
+    margin-left: 2.2em;
+    border: 3px solid rgba(0,0,0,.2);
+    border-top-color: #000;
+  }
+  @keyframes spin {
+    to { -webkit-transform: rotate(360deg); }
+  }
+  @-webkit-keyframes spin {
+    to { -webkit-transform: rotate(360deg); }
+  }
+  
+  .hide-element {
+    display: none !important;
+  }
+  
+  input#totp-code {
+    margin-left: 6px;
+    border: none;
+    background: none;
+    width: 7em;
+  }
+  
+  input#totp-code:focus {
+    border: none;
+  }
+  
+  div#piv-help-text {
+    text-align: start;
+  }
+  div#piv-help-text {
+    /*margin-top: 15px;*/
+  }
+  div#piv-help-text p b {
+    font-weight: bolder;
+  }
+  
+  div#t-and-c {
+      color: #1F303E;
+      text-align: left;
+      margin-bottom: 25px;
+      font-size: 14px !important;
+      font-style: normal !important;
+      font-weight: 400 !important;
+      line-height: 100% !important;
+  }
+  
+  
+  
+  
+  /*********************************************
+  * Terms Modal:
+  **********************************************/
+  .terms {
+      position: fixed; /* Stay in place */
+      z-index: 9999; /* Sit on top */
+      padding-top: 100px; /* Location of the box */
+      left: 0;
+      top: 0;
+      width: 100%; /* Full width */
+      height: 100%; /* Full height */
+      overflow: auto; /* Enable scroll if needed */
+      background-color: rgb(0, 0, 0); /* Fallback color */
+      background-color: rgba(0, 0, 0, 0.4); /* Black w/ opacity */
+  }
+  .terms-content {
+      border-radius: 10px;
+      background-color: #fefefe;
+      margin: auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 80%;
+  }
+  .terms-title {
+    color: blue;
+    font-size:20px;
+    font-weight: bold;
+  }
+  .terms-close {
+      color: #000;
+      opacity: 0.7;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      border: 0;
+      background: 0 0;
+  }
+  
+  
+  
+  
+  
+  /*********************************************
+  * Widget Customization Styles:
+  **********************************************/
+  /* okta sign in widget - hide help link */
+  a[data-se='help'] {
+    display:none;
+    visibility:hidden;
+  }
+  
+  /* button - hide defalt submit button */
+  /* button - hide defalt piv button */
+  #okta-sign-in div.primary-auth input[type='submit'].button,
+  #okta-sign-in div.primary-auth a[data-se='piv-card-button'] {
+    display:none;
+  }
+  
+  /* sign in button style */
+  #okta-sign-in .default-custom-button.link-button.sign-in-clone {
+    background: #000;
+    border: none;
+    color: #fff;
+  }
+  /* piv button style */
+  #okta-sign-in .default-custom-button.link-button.piv-clone {
+    background: none;
+    border: 2px solid #000;
+    color: #000;
+  }
+  
+  /* terms text smaller to fit in 1 line */
+  div#termserror {
+    font-size:0.79rem;
+  }
+  
+  /*********************************************
+  * Accessibility 508 fixes:
+  **********************************************/
+  input[type='checkbox']:focus {  
+      outline :1px solid blue !important; 
+  }
+  
+  a:focus {
+      outline: solid 1px !important;
+  }
+  
+  .link:focus {
+      outline: solid 1px !important;
+  }
+  
+  
+  
+  
+  
+  /*********************************************
+  * Widget Overrides:
+  **********************************************/
+  /* okta sign in widget - remove borders and background colors */
+  #okta-sign-in.auth-container.main-container {
+    background: none;
+  }
+  /* okta sign in widget - remove line between app logo and login fields */
+  #okta-sign-in.auth-container .okta-sign-in-header {
+    border:none;
+  }
+  /* okta sign in widget - remove line on bottom of widget */
+  #okta-sign-in.auth-container.main-container {
+    box-shadow: none;
+  }
+  /* okta sign in widget - remove padding above widget */
+  #okta-sign-in {
+    margin-top: 0;
+  }
+  #okta-sign-in.auth-container.main-container {
+    border: 1px solid #a9ffdc;
+    border-radius: 6px;
+  }
+  /* okta sign in widget - remove padding around logo*/
+  /*
+  #okta-sign-in .auth-header, #okta-sign-in.no-beacon .auth-header {
+    padding: 0;
+  }
+  */
+  
+  /* okta sign in widget - try to make all text black */
+  #okta-sign-in.auth-container, #okta-sign-in.auth-container p, #okta-sign-in.auth-container *, #okta-sign-in.auth-container.main-container * {
+    color:#000;
+  }
+  /* okta sign in widget - ensure border around factor logo is white */
+  #okta-sign-in.auth-container.main-container div.beacon-blank {
+    color:#fff;
+  }
+  
+  /* okta sign in widget - change border around factor logo smaller */
+  #okta-sign-in .auth-beacon {
+    box-shadow: 0 0 0 5px;
+  }
+  
+  
+  /* okta sign in widget - change colors on Sign In button */
+  #okta-sign-in.auth-container .button-primary, #okta-sign-in.auth-container .button-primary:focus, #okta-sign-in.auth-container .button-primary:active {
+    background: #000;
+    color:#fff;
+    border:none;
+  }
+  #okta-sign-in.auth-container .button-primary:hover {
+    background: #fff;
+    color:#000;
+  }
+  
+  /* okta sign in widget - when tab focusing sign in button make it red */
+  #okta-sign-in.auth-container input[type=button]:focus, #okta-sign-in.auth-container input[type=submit]:focus {
+    border: 2px solid red;
+  }
+  
+  /* okta sign in widget - less padding between piv help text and forgot password link */
+  #okta-sign-in .o-form-button-bar {
+    padding: 0 0 10px;
+  }
+  
+  /* okta sign in widget - change line separator to black */
+  #okta-sign-in .sign-in-with-idp .separation-line:before {
+    border-top: 1px solid #000;
+  }
+  /* okta sign in widget - change line separator text box background color */
+  #okta-sign-in .sign-in-with-idp .separation-line span {
+    background: var(--color-bg);
+    color:black;
+  }
+  /* okta sign in widget - change top margin on separator line */
+  #okta-sign-in div.sign-in-with-idp div.separation-line {
+      margin-top: 0px;
+  }
+  
+  /* okta sign in widget - change size and position of "Sign In" header text */
+  #okta-sign-in div.siw-main-view.primary-auth h2.okta-form-title.o-form-head {
+    text-align: start;
+    font-size: 1.5rem;
+  }
+  
+  
+  /* okta sign in widget - decrease padding below error */
+  #okta-sign-in .o-form-theme {
+    padding-bottom:0;
+  }
+  
+  /* okta sign in widget - link text black */
+  #okta-sign-in.auth-container .link, #okta-sign-in.auth-container .link:active, #okta-sign-in.auth-container .link:hover, #okta-sign-in.auth-container .link:link, #okta-sign-in.auth-container .link:visited {
+    color: #000;
+  }
