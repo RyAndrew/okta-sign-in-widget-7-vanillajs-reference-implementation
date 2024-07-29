@@ -9,7 +9,8 @@ Created 2024-06-11
 
 This example provides a number of enhancements for general implementation and user experience best practices.
 
-![338677200-8087b298-7731-4c02-8a17-f74417b2ee16](https://github.com/user-attachments/assets/cc07b331-afbb-492c-a515-89edfa161574)
+![Okta Embedded Sign-In-Widget v7](https://github.com/user-attachments/assets/8b5a59bc-8f68-4409-a2e5-163bc6fc0680)
+
 
 Customized Functionality
 * Visual Feedback on submitting credentials
