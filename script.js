@@ -29,12 +29,6 @@ let signIn = new OktaSignIn({
   // note css styling drastically changes when you flip this
   //useClassicEngine:true,
   
-  //piv testing - no change here!
-  //relayState:'https://customized-okta-embedded-widget-7.glitch.me/',
-  //piv: {
-  //  certAuthUrl: 'https://dev-8675309.mtls.okta.com/api/internal/v1/authn/cert',
-  //  isCustomDomain: false,
-  //},
   logo: 'https://ok14static.oktacdn.com/fs/bco/4/fs0foccjd4fzM5pKk697',
   helpLinks: {
     forgotPassword: 'http://example.com/forgot',
@@ -75,7 +69,7 @@ const issuerHost = issuer.protocol+'//'+issuer.host
 
 let userTokens = null
 let firstRenderComplete = false
-let activeFormName = null
+let activeContext = null
 
 initSpaApp()
 
@@ -86,7 +80,7 @@ async function initSpaApp() {
   signIn.on('afterRender', function (context) {
     console.log('signIn on afterRender context',context)
        
-    activeFormName = context.formName
+    activeContext = context
 
     if(!firstRenderComplete){
       firstRenderComplete = true
@@ -98,28 +92,14 @@ async function initSpaApp() {
       const error = urlParams.get('error')
       if(error){
         const error_description = urlParams.get('error_description')
-        console.log('Redirect error found in url!',error)
+        console.log('Redirect error found in url!',error,error_description)
         if(error_description){
-          console.log('error_description',error_description)
           showRedirectError(error_description) 
         }
         //clear error from address bar
         history.pushState({}, "", "/");      
       }
   
-      //signIn.authClient.authStateManager.subscribe
-      try{
-        console.log('signIn',signIn)
-        console.log('signIn.authClient',signIn.authClient)
-        console.log('signIn?.authClient?.authStateManager',signIn?.authClient?.authStateManager)
-        
-      // signIn.authClient.authStateManager.subscribe((authState) => {
-      //   console.log('auth state manager',authState)
-      //   // handle the latest evaluated authState, like integrate with client framework's state management store
-      // })
-      }catch(err){
-        console.log(err)
-      }
     }
     
     //watch the error element for child changes and hide the loading spinner if we see the specific error string
@@ -312,7 +292,6 @@ function applyWidgetCustomizations(){
     const widgetLoadSpin = document.createElement('div')
     widgetLoadSpin.id="widget-loading-spinner"
     widgetLoadSpin.className="hide-element"
-    //widgetLoadSpin.innerHTML = "<p><b>PIV Users: </b>To activate the PIV functionality, you must first sign in using your EUA ID and password during your initial login.</p>"
     document.querySelector(".okta-form-title").append(widgetLoadSpin)
   }
   hideElement('widget-loading-spinner')
@@ -349,7 +328,7 @@ function applyWidgetCustomizations(){
 
     const pivEl = document.createElement('div')
     pivEl.id="piv-help-text"
-    pivEl.innerHTML = "<p><b>PIV Users: </b>To activate the PIV functionality, you must first sign in using your EUA ID and password during your initial login.</p>"
+    pivEl.innerHTML = "<p><b>PIV Users: </b>To activate the PIV functionality, you must first sign in using your Issued ID and password during your initial login.</p>"
     document.querySelector(".o-form-button-bar").append(pivEl)
   }
 }
@@ -379,31 +358,47 @@ async function clickMfa(){
   document.getElementById('totp-code').value = value
 }
 async function clickLogMeIn(){
-  if(activeFormName ==='challenge-authenticator'){
+  console.log('activeContext',activeContext)
+  if(activeContext?.controller === 'mfa-verify' && activeContext?.formName ==='challenge-authenticator'){
     autofillMfaAndSubmit()
     return
-  }  
-  
-  let user = document.querySelector('input[name="identifier"]')
-  let userVal = "test@test.com";
-  //check for autofill
-  if(user.value !== userVal){
-    await simulateTyping(user,"test@test.com") 
   }
   
+  //if you have an existing session you go straight to the password or mfa inputs and entering user and agreeing to terms can be skipped
+  if(activeContext?.controller === 'primary-auth' && activeContext?.formName ==='identify' ){
+    
+    //input user name
+    let user = document.querySelector('input[name="identifier"]')
+    let userVal = "test@test.com";
+    //check for autofill
+    if(user.value !== userVal){
+      await simulateTyping(user,"test@test.com") 
+    }
+    
+    //check agree to terms
+    document.querySelector("input#tandc").checked = true
+  }
+
+  //input password
   let pass = document.querySelector('input[name="credentials.passcode"]')
   await simulateTyping(pass,"Secret123$")
   
-  document.querySelector("input#tandc").checked = true
+  //click the appropriate button based on the form type
+  if(activeContext?.controller === 'primary-auth' && activeContext?.formName ==='identify' ){
+        //click log on button
     let event = new Event("click", { bubbles: true, cancelable: true })
     event.detail=1
     document.querySelector("a.sign-in-clone.default-custom-button").dispatchEvent(event)
+  }
+  if(activeContext?.formName === 'challenge-authenticator' ){
+    document.querySelector('input.button-primary[type="submit"]').click()
+  }
   
   //wait 2 seconds to input mfa
   window.setTimeout(()=>{
     
     //if you dont have the authenticator cookie set you have to select one first
-    if(activeFormName ==='select-authenticator-authenticate'){
+    if(activeContext?.formName ==='select-authenticator-authenticate'){
       clickGoogleAuthenticator()
       return
     }
@@ -446,7 +441,7 @@ async function simulateTyping(field, text) {
 async function clickAjaxPiv(){
   //clicking this button will do an ajax request to the MTLS endpoint so we can get the error message. If this succeeds we can click the widget piv button and it is likely to succeed.
   
-  showElement('loading-container')
+  showElement('widget-loading-spinner')
   
   const pivUrl = `https://${oktaTenant}.mtls.okta.com/api/internal/v1/authn/cert`
     
@@ -461,7 +456,7 @@ async function clickAjaxPiv(){
     })
     
     //hide loding indicator
-    hideElement('loading-container')
+    hideElement('widget-loading-spinner')
     
     if (response.ok) {
       //click widget piv button!
@@ -486,7 +481,7 @@ async function clickAjaxPiv(){
 
   } catch (error) {
     //hide loding indicator
-    hideElement('loading-container')
+    hideElement('widget-loading-spinner')
     
     console.error(error)
     pivOutput.innerHTML =  `<B>Error</B> Calling API ${pivUrl}<BR\><PRE>${error}</PRE>`
