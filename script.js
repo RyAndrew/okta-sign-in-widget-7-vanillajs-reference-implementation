@@ -46,6 +46,7 @@ const signIn = new OktaSignIn({
   issuer: oktaAuthInstance.options.issuer,
   scopes: oktaAuthInstance.options.scopes,
   authClient:oktaAuthInstance,
+  rememberMe: false,
   logo: 'https://ok14static.oktacdn.com/fs/bco/4/fs0foccjd4fzM5pKk697',
   helpLinks: {
     forgotPassword: 'http://example.com/forgot',
@@ -77,12 +78,12 @@ const signIn = new OktaSignIn({
   ],
 })
 
-const issuer = new URL(signIn.options.issuer)
+const issuer = new URL(oktaAuthInstance.options.issuer)
 const issuerHost = issuer.protocol+'//'+issuer.host
 
-let userTokens = null
 let firstRenderComplete = false
 let activeContext = null
+let redirectBeingHandledFlag = false
 
 initSpaApp()
 
@@ -95,24 +96,46 @@ async function initSpaApp() {
     if (authState.isAuthenticated) {
         // Render authenticated view
         console.log('Logged IN!')
-        
-        userTokens = authState
+
         signIn.remove()
-      
+
         getTokensFromStorageShowLoggedIn()
     } else {
         // Render unathenticated view
         console.log('Logged OUT!')
         updateUiAuthenticatedStatus(false)
-      
-        showLoginWidget()
+
+        //if already handling a login, don't initiate another login
+        //this is for piv
+        if(!redirectBeingHandledFlag){  
+          showLoginWidget() 
+        }else{
+          //clear flag
+          redirectBeingHandledFlag = false
+        }
     }
+    
   })
   
   attachWidgetListeners()
   
-  //verify auth status
-  startOktaService() // calls authStateManager.updateAuthState()
+  
+  //handle PIV mtls redirect:
+  if (oktaAuthInstance.isLoginRedirect()) {
+      console.log('yes is redirect!')
+    try {
+      redirectBeingHandledFlag = true
+      //verify auth status
+      startOktaService()
+      
+      await oktaAuthInstance.handleRedirect()
+    } catch (error) {
+      console.log('handleRedirect error!',error)
+    }
+  }else{
+    //check current auth status
+    startOktaService() // calls authStateManager.updateAuthState()
+  }
   
   //bugfix for back button - prevent page cache to re-render after piv fails and you hit back
   document.body.onunload=function(){}
@@ -127,9 +150,6 @@ function showLoginWidget(){
     signIn.remove()
     
     hideElement("loading-container")
-    
-    //do something with the token!
-    userTokens = result.tokens
     
     console.log('result.tokens',result.tokens)
     
@@ -368,7 +388,7 @@ function clickPaperwork(){
   " Officer, Mail Stop C4-26-05, Baltimore, Maryland 21244-1850.");
 }
 async function startOktaService() {
-    await oktaAuthInstance.start()
+  await oktaAuthInstance.start()
 }
 function getTokensFromStorageShowLoggedIn() {
   oktaAuthInstance.tokenManager.get('idToken').then(idToken => {
@@ -556,8 +576,9 @@ async function callApiOutputResult(url, useOktaSessionAuth){
   if(useOktaSessionAuth){
     credentials = 'include' //include cross origin cookies
   }else{
+    const accessToken = await oktaAuthInstance.tokenManager.get('accessToken');
     headers = {
-        'Authorization': 'Bearer '+userTokens.accessToken.accessToken, 
+        'Authorization': 'Bearer '+accessToken.accessToken, 
     }
   }
   
@@ -612,12 +633,14 @@ async function clickMyAccountAuthenticators(){
     
   const apioutput = document.getElementById("output")
   
+  const accessToken = await oktaAuthInstance.tokenManager.get('accessToken');
+    
   try {
     const response = await fetch(urlmyaccountauthenticators,
     {
       headers:{
         accept:'application/json; okta-version=1.0.0',
-        Authorization: 'Bearer '+userTokens.accessToken.accessToken, 
+        Authorization: 'Bearer '+accessToken.accessToken, 
       },
     })
     
@@ -823,34 +846,34 @@ function showElement(id) {
 // https://github.com/turistu/totp-in-javascript
 
 async function totp(key, secs = 30, digits = 6){
-	return hotp(unbase32(key), pack64bu(Date.now() / 1000 / secs), digits);
+  return hotp(unbase32(key), pack64bu(Date.now() / 1000 / secs), digits);
 }
 async function hotp(key, counter, digits){
-	let y = self.crypto.subtle;
-	if(!y) throw Error('no self.crypto.subtle object available');
-	let k = await y.importKey('raw', key, {name: 'HMAC', hash: 'SHA-1'}, false, ['sign']);
-	return hotp_truncate(await y.sign('HMAC', k, counter), digits);
+  let y = self.crypto.subtle;
+  if(!y) throw Error('no self.crypto.subtle object available');
+  let k = await y.importKey('raw', key, {name: 'HMAC', hash: 'SHA-1'}, false, ['sign']);
+  return hotp_truncate(await y.sign('HMAC', k, counter), digits);
 }
 function hotp_truncate(buf, digits){
-	let a = new Uint8Array(buf), i = a[19] & 0xf;
-	return fmt(10, digits, ((a[i]&0x7f)<<24 | a[i+1]<<16 | a[i+2]<<8 | a[i+3]) % 10**digits);
+  let a = new Uint8Array(buf), i = a[19] & 0xf;
+  return fmt(10, digits, ((a[i]&0x7f)<<24 | a[i+1]<<16 | a[i+2]<<8 | a[i+3]) % 10**digits);
 }
 
 function fmt(base, width, num){
-	return num.toString(base).padStart(width, '0')
+  return num.toString(base).padStart(width, '0')
 }
 function unbase32(s){
-	let t = (s.toLowerCase().match(/\S/g)||[]).map(c => {
-		let i = 'abcdefghijklmnopqrstuvwxyz234567'.indexOf(c);
-		if(i < 0) throw Error(`bad char '${c}' in key`);
-		return fmt(2, 5, i);
-	}).join('');
-	if(t.length < 8) throw Error('key too short');
-	return new Uint8Array(t.match(/.{8}/g).map(d => parseInt(d, 2)));
+  let t = (s.toLowerCase().match(/\S/g)||[]).map(c => {
+    let i = 'abcdefghijklmnopqrstuvwxyz234567'.indexOf(c);
+    if(i < 0) throw Error(`bad char '${c}' in key`);
+    return fmt(2, 5, i);
+  }).join('');
+  if(t.length < 8) throw Error('key too short');
+  return new Uint8Array(t.match(/.{8}/g).map(d => parseInt(d, 2)));
 }
 function pack64bu(v){
-	let b = new ArrayBuffer(8), d = new DataView(b);
-	d.setUint32(0, v / 2**32);
-	d.setUint32(4, v);
-	return b;
+  let b = new ArrayBuffer(8), d = new DataView(b);
+  d.setUint32(0, v / 2**32);
+  d.setUint32(4, v);
+  return b;
 }

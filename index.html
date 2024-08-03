@@ -44,11 +44,12 @@
           <p>
             <button onclick="clickCallOktaApi()">⚡ Call Okta API</button>
             <button id="show-tokens" onclick="clickShowTokens()">🗝️ Show Tokens</button><button id="hide-tokens" onclick="clickHideTokens()" class="hide-element">🗝️ Hide Tokens</button> 
-            <!-- <button id="enrollMfa" onclick="clickEnrollMfa()">📱 Enroll MFA</button> --> 
             
             <button id="signOut" onclick="clickSignOut()">🔒 Sign Out</button>
             <div id="tokens"></div>
-            <div id="api-buttons" class="hide-element"><button onclick="clickApiUserinfo()">⚡ /oauth2/v1/userinfo</button> <button onclick="clickApiReadUser()">⚡ /api/v1/users/me</button> <button onclick="clickApiAppLinks()">⚡ /api/v1/users/me/appLinks</button> <button onclick="clickApiReadUserGroups()">⚡ /api/v1/users/me/groups</button> <button onclick="clickMyAccountAuthenticators()">⚡ /idp/myaccount/authenticators</button> </div>
+            <div id="api-buttons" class="hide-element">
+              <button onclick="clickApiSessionsMe()">⚡ /sessions/me</button> <button onclick="clickApiUserinfo()">⚡ /oauth2/v1/userinfo</button> <button onclick="clickApiReadUser()">⚡ /api/v1/users/me</button> <button onclick="clickApiAppLinks()">⚡ /api/v1/users/me/appLinks</button> <button onclick="clickApiReadUserGroups()">⚡ /api/v1/users/me/groups</button> <button onclick="clickMyAccountAuthenticators()">⚡ /idp/myaccount/authenticators</button> 
+           </div>
           </p>
           <div id="output"></div>
         </div>
