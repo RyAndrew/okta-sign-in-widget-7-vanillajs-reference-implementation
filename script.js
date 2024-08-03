@@ -1,10 +1,14 @@
 "use strict";
 
-let signIn = new OktaSignIn({
+const oktaTenant = 'dev-8675309'
+
+// TOTP MFA seed
+const totpSeed = 'STXYMWG3AZFRCEQ3'
+
+const oktaAuthInstance = new OktaAuth({
   //custom auth server
   //issuer: 'https://auth.importantcompany.com/oauth2/auseizqihsBSLpXuq697',
   //scopes: ['openid','profile','email','offline_access'],
-
   //for okta scopes, must use org auth server:
   issuer: 'https://auth.importantcompany.com/',
   scopes: [
@@ -29,6 +33,19 @@ let signIn = new OktaSignIn({
   // note css styling drastically changes when you flip this
   //useClassicEngine:true,
   
+  services: {
+    autoRenew: true, //automatically renew refresh tokens when they are close to expiration
+    autoRemove: true, //automatically remove expired tokens
+    syncStorage: true, //sync tokens between browser tabs
+  },
+})
+
+const signIn = new OktaSignIn({
+  clientId: oktaAuthInstance.options.clientId,
+  redirectUri: oktaAuthInstance.options.redirectUri,
+  issuer: oktaAuthInstance.options.issuer,
+  scopes: oktaAuthInstance.options.scopes,
+  authClient:oktaAuthInstance,
   logo: 'https://ok14static.oktacdn.com/fs/bco/4/fs0foccjd4fzM5pKk697',
   helpLinks: {
     forgotPassword: 'http://example.com/forgot',
@@ -60,10 +77,6 @@ let signIn = new OktaSignIn({
   ],
 })
 
-// TOTP MFA seed
-const totpSeed = 'STXYMWG3AZFRCEQ3'
-
-const oktaTenant = 'dev-8675309'
 const issuer = new URL(signIn.options.issuer)
 const issuerHost = issuer.protocol+'//'+issuer.host
 
@@ -75,8 +88,70 @@ initSpaApp()
 
 async function initSpaApp() {
   console.log('initSpaApp')
-  console.log('signIn',signIn)
+    
+  oktaAuthInstance.authStateManager.subscribe(function (authState) {
+    console.log('authStateManager!',authState)
+
+    if (authState.isAuthenticated) {
+        // Render authenticated view
+        console.log('Logged IN!')
+        
+        userTokens = authState
+        signIn.remove()
+      
+        getTokensFromStorageShowLoggedIn()
+    } else {
+        // Render unathenticated view
+        console.log('Logged OUT!')
+        updateUiAuthenticatedStatus(false)
+      
+        showLoginWidget()
+    }
+  })
   
+  attachWidgetListeners()
+  
+  //verify auth status
+  startOktaService() // calls authStateManager.updateAuthState()
+  
+  //bugfix for back button - prevent page cache to re-render after piv fails and you hit back
+  document.body.onunload=function(){}
+}
+function showLoginWidget(){
+  
+  //when promise resolves the user tokens are provided!
+  signIn.showSignIn({el: '#login-container'}).then(function(result) {
+    console.log('showSignIn then',result)
+    
+    //hide widget
+    signIn.remove()
+    
+    hideElement("loading-container")
+    
+    //do something with the token!
+    userTokens = result.tokens
+    
+    console.log('result.tokens',result.tokens)
+    
+    oktaAuthInstance.tokenManager.setTokens(result.tokens)
+    
+  }).catch(function(error) {
+    //catch errors from the token request
+  
+    console.log('showSignIn catch error',error)
+    
+    //hide widget
+    //signIn.remove()
+    
+    //hide loading spinner
+    hideElement("loading-container")
+    
+    //show error msg
+    document.getElementById("error").innerHTML = 'Error Requesting Token! <BR /><B>'+error+'</B><BR /><button onclick="location.reload()">Refresh Page</button>'
+  })
+}
+
+function attachWidgetListeners(){
   signIn.on('afterRender', function (context) {
     console.log('signIn on afterRender context',context)
        
@@ -123,8 +198,6 @@ async function initSpaApp() {
     
   })
   
-  
-  
   signIn.on('afterError', function (context, error) {
     console.log('signIn.on afterError',error)
     
@@ -138,46 +211,70 @@ async function initSpaApp() {
       applyWidgetCustomizations()
     },1)
   })
-  
-  //when promise resolves the user tokens are provided!
-  signIn.showSignIn({el: '#login-container'}).then(function(result) {
-    console.log('showSignIn then',result)
-    
-    //hide widget
-    signIn.remove()
-    //signIn.hide()
-    //hideElement('login-container')
-    
-    hideElement("loading-container")
-    
-    //do something with the token!
-    userTokens = result.tokens
-    
-    console.log('result.tokens',result.tokens)
-    updateUiAuthenticatedStatus(true, result.tokens.idToken)
-  }).catch(function(error) {
-    //catch errors from the token request
-  
-    console.log('showSignIn catch error',error)
-    
-    //hide widget
-    //signIn.remove()
-    
-    //hide loading spinner
-    hideElement("loading-container")
-    //hideElement('logged-out-container')
-    
-    //show error msg
-    document.getElementById("error").innerHTML = 'Error Requesting Token! <BR /><B>'+error+'</B><BR /><button onclick="location.reload()">Refresh Page</button>'
-  })
-  
-  
-  console.log(signIn.authClient)
-  
-  //bugfix for back button - prevent page cache to re-render after piv fails and you hit back
-  document.body.onunload=function(){}
 }
 
+function applyWidgetCustomizations(){
+  //global parent element keydown event handler to intercept form submits via enter key
+  document.querySelector("div.primary-auth").addEventListener('keydown', (event)=>{
+       
+    if(event.key === "Enter"){
+      //if you hit enter on a link dont intercept
+      if(event.target.tagName==='A'){
+        return 
+      }
+      if(!termsVerifyChecked()){
+        termsShowError()
+        event.preventDefault()
+        return
+      }
+      showElement('widget-loading-spinner')
+    }
+  })
+
+  if(!document.querySelector(".okta-form-title #widget-loading-spinner")){
+    const widgetLoadSpin = document.createElement('div')
+    widgetLoadSpin.id="widget-loading-spinner"
+    widgetLoadSpin.className="hide-element"
+    document.querySelector(".okta-form-title").append(widgetLoadSpin)
+  }
+  hideElement('widget-loading-spinner')
+
+  //Add terms and conditions checkbox
+  if(!document.querySelector(".o-form-button-bar #t-and-c")){
+    const tncEl = document.createElement('div')
+    tncEl.innerHTML = '<div id="t-and-c" style="display: flex;">' +
+               '<input style="margin-right: 5px;" type="checkbox" title="Agree to terms and conditions" id="tandc" name="tandc"/>' +
+               '<label for="tandc">Agree to our ' + 
+                 '<a href="#" title="View terms and conditions" id="tnc-href" onClick="clickShowTermsConditions(); return false;">Terms & Conditions</a>' +
+               '</label>' + 
+            '</div>'
+    document.querySelector(".o-form-button-bar").prepend(tncEl)
+
+    const termsCheckbox = document.getElementById("tandc")
+    termsCheckbox.addEventListener('change',termsCheckChange)
+  }
+
+  //remove second separation line
+  document.querySelector("div.custom-buttons div.separation-line").remove()
+
+  //move forgot password link to under PIV button
+  if(!document.querySelector(".auth-footer a[data-se='forgot-password']")){
+    document.querySelector(".auth-footer").prepend(document.querySelector("a[data-se='forgot-password']"))
+  }
+
+  //move sign in clone to above sign in
+  const existingSubmitButton = document.querySelector("input[type='submit'].button")
+  existingSubmitButton.parentNode.insertBefore(document.querySelector("a.sign-in-clone"),existingSubmitButton)
+
+  //if piv help text isn't present - add it
+  if(!document.querySelector("#piv-help-text")){
+
+    const pivEl = document.createElement('div')
+    pivEl.id="piv-help-text"
+    pivEl.innerHTML = "<p><b>PIV Users: </b>To activate the PIV functionality, you must first sign in using your Issued ID and password during your initial login.</p>"
+    document.querySelector(".o-form-button-bar").append(pivEl)
+  }
+}
 function termsCheckChange(event){
   //hide error immediately upon checking agree
   if(event.target.checked){
@@ -270,67 +367,20 @@ function clickPaperwork(){
   " improving this form, please write to: DHS, 7500 Security Boulevard, Attn: PRA Reports Clearance" +
   " Officer, Mail Stop C4-26-05, Baltimore, Maryland 21244-1850.");
 }
-function applyWidgetCustomizations(){
-  //global parent element keydown event handler to intercept form submits via enter key
-  document.querySelector("div.primary-auth").addEventListener('keydown', (event)=>{
-       
-    if(event.key === "Enter"){
-      //if you hit enter on a link dont intercept
-      if(event.target.tagName==='A'){
-        return 
-      }
-      if(!termsVerifyChecked()){
-        termsShowError()
-        event.preventDefault()
-        return
-      }
-      showElement('widget-loading-spinner')
+async function startOktaService() {
+    await oktaAuthInstance.start()
+}
+function getTokensFromStorageShowLoggedIn() {
+  oktaAuthInstance.tokenManager.get('idToken').then(idToken => {
+    if (idToken) {
+        console.log('Token storage has ID Token',idToken)
+
+        hideElement("loading-container")
+        updateUiAuthenticatedStatus(true, idToken)
+    } else {
+        console.log('Token storage DOES NOT have ID Token')
     }
   })
-
-  if(!document.querySelector(".okta-form-title #widget-loading-spinner")){
-    const widgetLoadSpin = document.createElement('div')
-    widgetLoadSpin.id="widget-loading-spinner"
-    widgetLoadSpin.className="hide-element"
-    document.querySelector(".okta-form-title").append(widgetLoadSpin)
-  }
-  hideElement('widget-loading-spinner')
-
-  //Add terms and conditions checkbox
-  if(!document.querySelector(".o-form-button-bar #t-and-c")){
-    const tncEl = document.createElement('div')
-    tncEl.innerHTML = '<div id="t-and-c" style="display: flex;">' +
-               '<input style="margin-right: 5px;" type="checkbox" title="Agree to terms and conditions" id="tandc" name="tandc"/>' +
-               '<label for="tandc">Agree to our ' + 
-                 '<a href="#" title="View terms and conditions" id="tnc-href" onClick="clickShowTermsConditions(); return false;">Terms & Conditions</a>' +
-               '</label>' + 
-            '</div>'
-    document.querySelector(".o-form-button-bar").prepend(tncEl)
-
-    const termsCheckbox = document.getElementById("tandc")
-    termsCheckbox.addEventListener('change',termsCheckChange)
-  }
-
-  //remove second separation line
-  document.querySelector("div.custom-buttons div.separation-line").remove()
-
-  //move forgot password link to under PIV button
-  if(!document.querySelector(".auth-footer a[data-se='forgot-password']")){
-    document.querySelector(".auth-footer").prepend(document.querySelector("a[data-se='forgot-password']"))
-  }
-
-  //move sign in clone to above sign in
-  const existingSubmitButton = document.querySelector("input[type='submit'].button")
-  existingSubmitButton.parentNode.insertBefore(document.querySelector("a.sign-in-clone"),existingSubmitButton)
-
-  //if piv help text isn't present - add it
-  if(!document.querySelector("#piv-help-text")){
-
-    const pivEl = document.createElement('div')
-    pivEl.id="piv-help-text"
-    pivEl.innerHTML = "<p><b>PIV Users: </b>To activate the PIV functionality, you must first sign in using your Issued ID and password during your initial login.</p>"
-    document.querySelector(".o-form-button-bar").append(pivEl)
-  }
 }
 function updateUiAuthenticatedStatus(authenticated, idToken) {
 
@@ -483,39 +533,43 @@ async function clickAjaxPiv(){
     //hide loding indicator
     hideElement('widget-loading-spinner')
     
+    showRedirectError('PIV Login Failed!<BR>'+error) 
+    
     console.error(error)
     pivOutput.innerHTML =  `<B>Error</B> Calling API ${pivUrl}<BR\><PRE>${error}</PRE>`
   }
   
 }
-// function clickEnrollMfa(){
-//   //this does not work at all - maybe needs policies to have optional enrollment? must test
-//   //showElement('login-container')
-//   signIn.showSignIn({flow: 'enrollProfile', el: '#login-container'}).then(function(result) {
-//     console.log('enroll mfa done!',result)
-//   })
-// }
+
 async function clickCallOktaApi(){
   toggleHide('api-buttons')
 }
-async function callApiOutputResult(url){
-  console.log('userTokens',userTokens)
-  console.log('sub',userTokens.idToken.claims.sub)
-  console.log(signIn.options.issuer)
+async function callApiOutputResult(url, useOktaSessionAuth){
+  
   //clear output
   const apioutput = document.getElementById("output")
   apioutput.innerHTML = ''
   
+  //config api auth type
+  let headers = {}
+  let credentials = 'same-origin' //default
+  if(useOktaSessionAuth){
+    credentials = 'include' //include cross origin cookies
+  }else{
+    headers = {
+        'Authorization': 'Bearer '+userTokens.accessToken.accessToken, 
+    }
+  }
+  
   //show loding indicator
   showElement('loading-container')
-  
+  let options = {
+      credentials,
+      headers,
+    }
+  console.log('fetch options:',options)
   try {
-    const response = await fetch(url,
-    {
-      headers:{
-        'Authorization': 'Bearer '+userTokens.accessToken.accessToken, 
-      }
-    })
+    const response = await fetch(url,options)
     //check for error
     if (!response.ok) {
       console.error(response)
@@ -604,6 +658,10 @@ async function clickMyAccountAuthenticators(){
   }
   
 }
+
+function clickApiSessionsMe(){
+  callApiOutputResult(issuerHost + '/api/v1/sessions/me', true)
+}
 function clickApiReadUserFactors(){
   callApiOutputResult(issuerHost + '/api/v1/users/me/factors')
 }
@@ -636,7 +694,9 @@ async function clickShowTokens() {
   hideElement('show-tokens')
   showElement('hide-tokens')
 
-  document.getElementById("tokens").innerHTML = formatTokenOutput(userTokens)
+  const tokens = await oktaAuthInstance.tokenManager.getTokens()
+    
+  document.getElementById("tokens").innerHTML = formatTokenOutput(tokens)
 }
 function clickHideTokens() {
 
@@ -704,13 +764,11 @@ function clickHideTokens() {
 //   }
 // }
 function formatTokenOutput(tokenObj) {
-  //console.log(tokenObj);
   let output = ''
   for (const token in tokenObj) {
       if (token === 'refreshToken') {
           output += `<PRE><B>${token}</B><BR />${JSON.stringify(convertClaimsUtcToLocaleDates(tokenObj[token]), null, 4)}</PRE>`
       } else {
-  //console.log(tokenObj[token][token]);
           output += `<PRE><B>${token}</B><BR />${JSON.stringify(convertClaimsUtcToLocaleDates(tokenObj[token].claims), null, 4)}</PRE>`
       }
   }
