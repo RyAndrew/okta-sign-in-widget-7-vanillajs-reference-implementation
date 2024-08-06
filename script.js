@@ -82,14 +82,18 @@ const issuer = new URL(oktaAuthInstance.options.issuer)
 const issuerHost = issuer.protocol+'//'+issuer.host
 
 let firstRenderComplete = false
+let clickPivAfterRender = false
 let activeContext = null
-let redirectBeingHandledFlag = false
+let redirectError = null
 
 initSpaApp()
 
 async function initSpaApp() {
   console.log('initSpaApp')
-    
+  
+  //bugfix for back button - prevent page cache to re-render after piv fails and you hit back
+  document.body.onunload=function(){}
+  
   oktaAuthInstance.authStateManager.subscribe(function (authState) {
     console.log('authStateManager!',authState)
 
@@ -104,15 +108,8 @@ async function initSpaApp() {
         // Render unathenticated view
         console.log('Logged OUT!')
         updateUiAuthenticatedStatus(false)
-
-        //if already handling a login, don't initiate another login
-        //this is for piv
-        if(!redirectBeingHandledFlag){  
-          showLoginWidget() 
-        }else{
-          //clear flag
-          redirectBeingHandledFlag = false
-        }
+      
+        showLoginWidget()
     }
     
   })
@@ -124,21 +121,15 @@ async function initSpaApp() {
   if (oktaAuthInstance.isLoginRedirect()) {
       console.log('yes is redirect!')
     try {
-      redirectBeingHandledFlag = true
-      //verify auth status
-      startOktaService()
-      
       await oktaAuthInstance.handleRedirect()
     } catch (error) {
-      console.log('handleRedirect error!',error)
+      //save the error and show it after widget renders
+      redirectError = error
     }
-  }else{
-    //check current auth status
-    startOktaService() // calls authStateManager.updateAuthState()
   }
+  //check current auth status
+  startOktaService() // calls authStateManager.updateAuthState()
   
-  //bugfix for back button - prevent page cache to re-render after piv fails and you hit back
-  document.body.onunload=function(){}
 }
 function showLoginWidget(){
   
@@ -157,17 +148,26 @@ function showLoginWidget(){
     
   }).catch(function(error) {
     //catch errors from the token request
-  
-    console.log('showSignIn catch error',error)
     
-    //hide widget
-    //signIn.remove()
+    //this error is most commonly caused by the state token being invalid after 1 hour so clear it and try again
+    if(error?.name === 'AuthApiError'){
+      
+      if(!error?.xhr?.responseText){
+        console.log('no auth api error response found')
+        return
+      }
+      document.getElementById("error").innerHTML = 'Error Logging In! <BR /><B>'+error.xhr.responseText+'</B><BR />via showSignIn catch error<BR /><button onclick="location.reload()">Refresh Page</button>'
+      
+      console.log('AuthApiError detected :(')
+      oktaAuthInstance.transactionManager.clear()
+      location.reload()
+    }
     
     //hide loading spinner
     hideElement("loading-container")
     
     //show error msg
-    document.getElementById("error").innerHTML = 'Error Requesting Token! <BR /><B>'+error+'</B><BR /><button onclick="location.reload()">Refresh Page</button>'
+    document.getElementById("error").innerHTML = 'Error Logging In! <BR /><B>'+error+'</B><BR />via showSignIn catch error<BR /><button onclick="location.reload()">Refresh Page</button>'
   })
 }
 
@@ -181,6 +181,12 @@ function attachWidgetListeners(){
       firstRenderComplete = true
       hideElement('loading-container')
       showElement('logged-out-container')
+      
+      //was sdk redirect exception saved?
+      if(redirectError){
+        showRedirectError(redirectError) 
+        redirectError = null
+      }
       
       //check for errors passed in query string
       const urlParams = new URLSearchParams(window.location.search)
@@ -197,10 +203,13 @@ function attachWidgetListeners(){
   
     }
     
+    if(clickPivAfterRender){
+      clickWidgetPiv() 
+    }
+    
     //watch the error element for child changes and hide the loading spinner if we see the specific error string
     const observer = new MutationObserver((e)=>{
-      console.log('.o-form-error-container childList change')
-      if(document.querySelector('.o-form-error-container').innerHTML.includes("Please complete all required fields") ){
+      if(document?.querySelector('.o-form-error-container').innerHTML.includes("Please complete all required fields") ){
         hideElement('widget-loading-spinner') 
       }
     })
@@ -341,7 +350,7 @@ function termsVerifyBeforePiv(){
 
 function showRedirectError(error) {
   const errorContainer = document.querySelector('.o-form-error-container')
-
+  
   const redirectError = document.createElement('div')
   //termsError.id = 'redirectError'
   redirectError.innerHTML = `<div id="redirecterror" class="okta-form-infobox-error infobox infobox-error" role="alert"><span class="icon error-16"></span><p>${error}</p></div></div>`
@@ -428,6 +437,8 @@ async function clickMfa(){
   document.getElementById('totp-code').value = value
 }
 async function clickLogMeIn(){
+  document.getElementById('logMeIn').disabled = true;
+  
   console.log('activeContext',activeContext)
   if(activeContext?.controller === 'mfa-verify' && activeContext?.formName ==='challenge-authenticator'){
     autofillMfaAndSubmit()
@@ -436,7 +447,6 @@ async function clickLogMeIn(){
   
   //if you have an existing session you go straight to the password or mfa inputs and entering user and agreeing to terms can be skipped
   if(activeContext?.controller === 'primary-auth' && activeContext?.formName ==='identify' ){
-    
     //input user name
     let user = document.querySelector('input[name="identifier"]')
     let userVal = "test@test.com";
@@ -492,6 +502,8 @@ async function autofillMfaAndSubmit(){
     
     document.querySelector('input.button-primary[type="submit"]').click()
   
+    document.getElementById('logMeIn').disabled = false
+  
     //after logging in, scroll to the top of the page
     window.setTimeout(()=>{  
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -507,6 +519,9 @@ async function simulateTyping(field, text) {
     await new Promise(resolve => setTimeout(resolve, 90))
   }
   field.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }))
+}
+function clickWidgetPiv(){
+  document.querySelector("div.primary-auth a[data-se='piv-card-button']").click()
 }
 async function clickAjaxPiv(){
   //clicking this button will do an ajax request to the MTLS endpoint so we can get the error message. If this succeeds we can click the widget piv button and it is likely to succeed.
@@ -529,13 +544,34 @@ async function clickAjaxPiv(){
     hideElement('widget-loading-spinner')
     
     if (response.ok) {
-      //click widget piv button!
-      document.querySelector("div.primary-auth a[data-se='piv-card-button']").click()
-      return
+      
+      //does the current form show the piv button? if not we have to get back to a state where it will be shown
+      if(activeContext?.controller === 'primary-auth' && activeContext?.formName ==='identify' ){
+      
+        //click widget piv button!
+        clickWidgetPiv()
+        return
+      }else{
+        console.log('primary auth form not visible!')
+        
+        showElement("loading-container")
+        oktaAuthInstance.transactionManager.clear()
+        
+        oktaAuthInstance.session.close().then(() => {
+        
+          //reload the widget
+          signIn.remove()
+          showLoginWidget()
+          
+          hideElement("loading-container")
+          clickPivAfterRender = true
+          
+        }).catch(function (err) {
+            console.log('Error closing session', err)
+        })
+        
+      }
     }else{
-      console.error(response)
-      
-      
       //output error message
       pivOutput.innerHTML = `<B>Error</B> Calling ${pivUrl}<BR\><PRE>${response.status} ${response.statusText}</PRE>`
       try{
@@ -651,14 +687,11 @@ async function clickMyAccountAuthenticators(){
     if (!response.ok) {
       console.error(response)
       
-      
       //output error message
       apioutput.innerHTML = `<B>Error</B> Calling ${urlmyaccountauthenticators}<BR\><PRE>${response.status} ${response.statusText}</PRE>`
       try{
         const json = await response.json()
         apioutput.innerHTML = apioutput.innerHTML + JSON.stringify(json,null,4)
-        
-        showRedirectError('PIV Login Failed!<BR>'+json?.errorSummary) 
       }catch(err){
         console.log('mtls response invalid json')
       }
@@ -706,11 +739,6 @@ function clickSignOut() {
       clearTokensBeforeRedirect: true,
       postLogoutRedirectUri: location.protocol.concat("//").concat(window.location.host)
   })
-  hideElement('logged-out-container')
-  hideElement('logged-in-container')
-  hideElement('tokens')
-
-  showElement('loading-container')
 }
 async function clickShowTokens() {
 
@@ -846,34 +874,34 @@ function showElement(id) {
 // https://github.com/turistu/totp-in-javascript
 
 async function totp(key, secs = 30, digits = 6){
-  return hotp(unbase32(key), pack64bu(Date.now() / 1000 / secs), digits);
+	return hotp(unbase32(key), pack64bu(Date.now() / 1000 / secs), digits);
 }
 async function hotp(key, counter, digits){
-  let y = self.crypto.subtle;
-  if(!y) throw Error('no self.crypto.subtle object available');
-  let k = await y.importKey('raw', key, {name: 'HMAC', hash: 'SHA-1'}, false, ['sign']);
-  return hotp_truncate(await y.sign('HMAC', k, counter), digits);
+	let y = self.crypto.subtle;
+	if(!y) throw Error('no self.crypto.subtle object available');
+	let k = await y.importKey('raw', key, {name: 'HMAC', hash: 'SHA-1'}, false, ['sign']);
+	return hotp_truncate(await y.sign('HMAC', k, counter), digits);
 }
 function hotp_truncate(buf, digits){
-  let a = new Uint8Array(buf), i = a[19] & 0xf;
-  return fmt(10, digits, ((a[i]&0x7f)<<24 | a[i+1]<<16 | a[i+2]<<8 | a[i+3]) % 10**digits);
+	let a = new Uint8Array(buf), i = a[19] & 0xf;
+	return fmt(10, digits, ((a[i]&0x7f)<<24 | a[i+1]<<16 | a[i+2]<<8 | a[i+3]) % 10**digits);
 }
 
 function fmt(base, width, num){
-  return num.toString(base).padStart(width, '0')
+	return num.toString(base).padStart(width, '0')
 }
 function unbase32(s){
-  let t = (s.toLowerCase().match(/\S/g)||[]).map(c => {
-    let i = 'abcdefghijklmnopqrstuvwxyz234567'.indexOf(c);
-    if(i < 0) throw Error(`bad char '${c}' in key`);
-    return fmt(2, 5, i);
-  }).join('');
-  if(t.length < 8) throw Error('key too short');
-  return new Uint8Array(t.match(/.{8}/g).map(d => parseInt(d, 2)));
+	let t = (s.toLowerCase().match(/\S/g)||[]).map(c => {
+		let i = 'abcdefghijklmnopqrstuvwxyz234567'.indexOf(c);
+		if(i < 0) throw Error(`bad char '${c}' in key`);
+		return fmt(2, 5, i);
+	}).join('');
+	if(t.length < 8) throw Error('key too short');
+	return new Uint8Array(t.match(/.{8}/g).map(d => parseInt(d, 2)));
 }
 function pack64bu(v){
-  let b = new ArrayBuffer(8), d = new DataView(b);
-  d.setUint32(0, v / 2**32);
-  d.setUint32(4, v);
-  return b;
+	let b = new ArrayBuffer(8), d = new DataView(b);
+	d.setUint32(0, v / 2**32);
+	d.setUint32(4, v);
+	return b;
 }
