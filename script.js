@@ -102,6 +102,8 @@ async function initSpaApp() {
         console.log('Logged IN!')
 
         signIn.remove()
+      
+        hideElement('login-container')
 
         getTokensFromStorageShowLoggedIn()
     } else {
@@ -134,7 +136,7 @@ async function initSpaApp() {
 function showLoginWidget(){
   
   //when promise resolves the user tokens are provided!
-  signIn.showSignIn({el: '#login-container'}).then(function(result) {
+  signIn.showSignIn({el: '#widget-container'}).then(function(result) {
     console.log('showSignIn then',result)
     
     //hide widget
@@ -161,6 +163,7 @@ function showLoginWidget(){
       console.log('AuthApiError detected :(')
       oktaAuthInstance.transactionManager.clear()
       location.reload()
+      return
     }
     
     //hide loading spinner
@@ -502,10 +505,9 @@ async function autofillMfaAndSubmit(){
     
     document.querySelector('input.button-primary[type="submit"]').click()
   
-    document.getElementById('logMeIn').disabled = false
-  
     //after logging in, scroll to the top of the page
     window.setTimeout(()=>{  
+      document.getElementById('logMeIn').disabled = false
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },1000)
     

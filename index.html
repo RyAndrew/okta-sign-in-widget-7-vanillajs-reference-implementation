@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -34,7 +33,7 @@
             <button id="mfa-button" class="action-button" onclick="clickMfa()">📱 MFA</button><input id="totp-code"/>
           </div>
           <div>
-            <button class="action-button" onclick="clickLogMeIn()">✨ Log Me In ✨</button>
+            <button class="action-button" id="logMeIn" onclick="clickLogMeIn()">✨ Log Me In ✨</button>
           </div>
         </div>
         <div id="logged-in-container" class="hide-element">
@@ -54,12 +53,14 @@
           <div id="output"></div>
         </div>
         <div id="loading-container"><div id="loading"></div></div>
-        <div id="login-container"></div>
-        <div id="error"></div>
+        <div id="login-container">
+          <div id="error"></div>     
+          <div id="widget-container"></div>
           <div>
             <button class="action-button" onclick="clickAjaxPiv()">💳 Ajax PIV</button>
             <div id="pivOutput"></div>
           </div>
+        </div> 
     </div>
   </div>
 <footer class="footer">
