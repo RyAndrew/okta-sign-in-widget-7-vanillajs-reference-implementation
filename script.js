@@ -102,8 +102,6 @@ async function initSpaApp() {
         console.log('Logged IN!')
 
         signIn.remove()
-      
-        hideElement('login-container')
 
         getTokensFromStorageShowLoggedIn()
     } else {
@@ -150,7 +148,7 @@ function showLoginWidget(){
     
   }).catch(function(error) {
     //catch errors from the token request
-    
+        
     //this error is most commonly caused by the state token being invalid after 1 hour so clear it and try again
     if(error?.name === 'AuthApiError'){
       
@@ -230,8 +228,15 @@ function attachWidgetListeners(){
     
   })
   
-  signIn.on('afterError', function (context, error) {
+  signIn.on('afterError', function (context, error) {    
     console.log('signIn.on afterError',error)
+    
+    console.log(error.xhr)
+    if(error?.xhr?.responseJSON?.errorSummaryKeys?.[0] === 'core.system.transaction_resource_not_found'){
+      oktaAuthInstance.transactionManager.clear()
+      location.reload()
+      return
+    }
     
     //hide widget loading spinner when the user enters password wrong
     //note this does not trigger when the user clicks submit with a blank password
